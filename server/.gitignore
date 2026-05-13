@@ -1,0 +1,12 @@
+node_modules/
+.env
+
+.DS_Store
+*.log
+
+# Prisma
+/prisma/migrations/
+
+# Environment
+.env
+/generated/prisma

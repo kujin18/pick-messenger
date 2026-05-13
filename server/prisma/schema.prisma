@@ -1,0 +1,513 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum AuthProvider {
+  GOOGLE
+  APPLE
+  KAKAO
+}
+
+enum PersonaVisibility {
+  PUBLIC
+  FRIENDS
+  PRIVATE
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+enum ChatRoomType {
+  DM
+  GROUP
+  CHANNEL
+}
+
+enum ChatMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  FILE
+  SYSTEM
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  REJECTED
+  BANNED
+}
+
+enum NotificationType {
+  FRIEND_REQUEST
+  MESSAGE
+  SYSTEM
+}
+
+enum PlatformType {
+  IOS
+  ANDROID
+  WEB
+}
+
+enum MediaStorageProvider {
+  S3
+  CLOUDINARY
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  MODERATOR
+}
+
+enum InviteType {
+  LINK
+  CODE
+}
+
+enum RoomVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model User {
+  id                  Int           @id @default(autoincrement())
+  uuid                String        @unique @default(uuid())
+  name                String
+  birth               DateTime?
+  gender              String?
+  statusMessage       String?
+  profileImage        String?
+  countryCode         String?
+  region              String?
+  city                String?
+  onboardingCompleted Boolean       @default(false)
+  accountStatus       AccountStatus @default(ACTIVE)
+  lastSeenAt          DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  deletedAt           DateTime?
+
+  accounts Account[]
+  tels     Tel[]
+  sessions Session[]
+  devices  Device[]
+  personas Persona[]
+
+  sentMessages Message[] @relation("SentMessages")
+
+  messageReads     MessageRead[]
+  messageReactions MessageReaction[]
+
+  chatMembers          ChatMember[]
+  notifications        Notification[]
+  notificationSettings NotificationSetting?
+
+  uploadedFiles MediaFile[]
+
+  requesterFriendships Friendship[] @relation("RequesterFriendships")
+  addresseeFriendships Friendship[] @relation("AddresseeFriendships")
+
+  blockerRelations Block[] @relation("BlockerRelations")
+  blockedRelations Block[] @relation("BlockedRelations")
+
+  sentReports   Report[] @relation("ReporterReports")
+  targetReports Report[] @relation("TargetUserReports")
+
+  auditLogs AuditLog[]
+  admin     Admin?
+
+  createdChatRooms ChatRoom[] @relation("CreatedChatRooms")
+}
+
+model Account {
+  id            Int          @id @default(autoincrement())
+  userId        Int
+  provider      AuthProvider
+  providerUid   String
+  email         String?      @unique
+  emailVerified Boolean      @default(false)
+  passwordHash  String?
+  lastLoginAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUid])
+}
+
+model Tel {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  tel        String    @unique
+  verified   Boolean   @default(false)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id               Int       @id @default(autoincrement())
+  userId           Int
+  refreshTokenHash String
+  deviceId         String?
+  ipAddress        String?
+  userAgent        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Device {
+  id           Int          @id @default(autoincrement())
+  userId       Int
+  deviceId     String
+  platform     PlatformType
+  pushToken    String?
+  appVersion   String?
+  lastActiveAt DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Persona {
+  id              Int               @id @default(autoincrement())
+  uuid            String            @unique @default(uuid())
+  userId          Int
+  nickname        String
+  bio             String?
+  profileImage    String?
+  backgroundImage String?
+  visibility      PersonaVisibility @default(PUBLIC)
+  discoverable    Boolean           @default(true)
+  isDefault       Boolean           @default(false)
+  followerCount   Int               @default(0)
+  friendCount     Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tags             PersonaTag[]
+  links            PersonaLink[]
+  speakingMessages Message[]     @relation("SpeakingPersona")
+
+  @@unique([userId, nickname])
+}
+
+model PersonaTag {
+  id        Int    @id @default(autoincrement())
+  personaId Int
+  tag       String
+
+  persona Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+}
+
+model PersonaLink {
+  id        Int      @id @default(autoincrement())
+  personaId Int
+  type      String
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  persona Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+}
+
+model Friendship {
+  id              Int              @id @default(autoincrement())
+  requesterUserId Int
+  addresseeUserId Int
+  status          FriendshipStatus @default(PENDING)
+  requestedAt     DateTime         @default(now())
+  acceptedAt      DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  requester User @relation("RequesterFriendships", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  addressee User @relation("AddresseeFriendships", fields: [addresseeUserId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterUserId, addresseeUserId])
+  @@index([requesterUserId])
+  @@index([addresseeUserId])
+}
+
+model Block {
+  id            Int      @id @default(autoincrement())
+  blockerUserId Int
+  blockedUserId Int
+  reason        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  blocker User @relation("BlockerRelations", fields: [blockerUserId], references: [id], onDelete: Cascade)
+  blocked User @relation("BlockedRelations", fields: [blockedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerUserId, blockedUserId])
+}
+
+model ChatRoom {
+  id              Int            @id @default(autoincrement())
+  uuid            String         @unique @default(uuid())
+  type            ChatRoomType
+  title           String?
+  image           String?
+  description     String?
+  visibility      RoomVisibility @default(PRIVATE)
+  inviteCode      String?        @unique
+  createdByUserId Int
+  lastMessageId   Int?
+  lastMessageAt   DateTime?
+  memberCount     Int            @default(0)
+  isArchived      Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  createdBy User @relation("CreatedChatRooms", fields: [createdByUserId], references: [id])
+
+  members  ChatMember[]
+  messages Message[]
+  invites  ChatInvite[]
+  settings ChatRoomSetting?
+}
+
+model ChatInvite {
+  id          Int        @id @default(autoincrement())
+  chatRoomId  Int
+  code        String     @unique
+  type        InviteType
+  maxUses     Int?
+  usedCount   Int        @default(0)
+  expiresAt   DateTime?
+  createdById Int
+  createdAt   DateTime   @default(now())
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+}
+
+model ChatRoomSetting {
+  id                Int      @id @default(autoincrement())
+  chatRoomId        Int      @unique
+  allowMemberInvite Boolean  @default(true)
+  allowMessageEdit  Boolean  @default(true)
+  allowMediaShare   Boolean  @default(true)
+  slowModeSeconds   Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+}
+
+model ChatMember {
+  id                   Int            @id @default(autoincrement())
+  chatRoomId           Int
+  userId               Int
+  role                 ChatMemberRole @default(MEMBER)
+  nicknameInRoom       String?
+  joinedAt             DateTime       @default(now())
+  leftAt               DateTime?
+  lastReadMessageId    Int?
+  unreadCount          Int            @default(0)
+  muted                Boolean        @default(false)
+  pinned               Boolean        @default(false)
+  hidden               Boolean        @default(false)
+  notificationsEnabled Boolean        @default(true)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chatRoomId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id                 Int         @id @default(autoincrement())
+  uuid               String      @unique @default(uuid())
+  chatRoomId         Int
+  senderUserId       Int
+  speakingPersonaId  Int?
+  type               MessageType
+  content            String?
+  metadataJson       Json?
+  replyMessageId     Int?
+  forwardedMessageId Int?
+  isEdited           Boolean     @default(false)
+  editedAt           DateTime?
+  deletedAt          DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+
+  sender User @relation("SentMessages", fields: [senderUserId], references: [id], onDelete: Cascade)
+
+  speakingPersona Persona? @relation("SpeakingPersona", fields: [speakingPersonaId], references: [id])
+
+  attachments MessageAttachment[]
+  reads       MessageRead[]
+  reactions   MessageReaction[]
+
+  @@index([chatRoomId, createdAt])
+  @@index([senderUserId])
+}
+
+model MessageAttachment {
+  id           Int      @id @default(autoincrement())
+  messageId    Int
+  fileUrl      String
+  fileName     String
+  mimeType     String
+  fileSize     Int
+  width        Int?
+  height       Int?
+  duration     Int?
+  thumbnailUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+model MessageRead {
+  id        Int      @id @default(autoincrement())
+  messageId Int
+  userId    Int
+  readAt    DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+}
+
+model MessageReaction {
+  id        Int      @id @default(autoincrement())
+  messageId Int
+  userId    Int
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+}
+
+model Notification {
+  id            Int              @id @default(autoincrement())
+  userId        Int
+  type          NotificationType
+  title         String
+  body          String?
+  image         String?
+  referenceType String?
+  referenceId   Int?
+  isRead        Boolean          @default(false)
+  readAt        DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+    @@index([userId, isRead])
+}
+
+model NotificationSetting {
+  id                   Int      @id @default(autoincrement())
+  userId               Int      @unique
+  pushEnabled          Boolean  @default(true)
+  marketingEnabled     Boolean  @default(false)
+  messageEnabled       Boolean  @default(true)
+  friendRequestEnabled Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+}
+
+model MediaFile {
+  id              Int                  @id @default(autoincrement())
+  uploaderUserId  Int
+  storageProvider MediaStorageProvider
+  fileKey         String
+  originalName    String
+  mimeType        String
+  size            Int
+  width           Int?
+  height          Int?
+  duration        Int?
+  createdAt       DateTime             @default(now())
+  deletedAt       DateTime?
+
+  uploader User @relation(fields: [uploaderUserId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id                Int          @id @default(autoincrement())
+  reporterUserId    Int
+  targetUserId      Int?
+  targetMessageId   Int?
+  reason            String
+  detail            String?
+  status            ReportStatus @default(PENDING)
+  reviewedByAdminId Int?
+  reviewedAt        DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  reporter   User  @relation("ReporterReports", fields: [reporterUserId], references: [id], onDelete: Cascade)
+  targetUser User? @relation("TargetUserReports", fields: [targetUserId], references: [id])
+}
+
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  actorUserId  Int?
+  action       String
+  targetType   String?
+  targetId     Int?
+  metadataJson Json?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  actor User? @relation(fields: [actorUserId], references: [id])
+}
+
+model Admin {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @unique
+  role      AdminRole
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
